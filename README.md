@@ -1,1 +1,1 @@
-database course at the agh
+database course at the agh.
