@@ -83,23 +83,114 @@
 --;
 
 -- 3.3
---SELECT CustomerID, CompanyName, Phone
---FROM Customers
---WHERE CustomerID NOT IN (   SELECT DISTINCT cus.CustomerID
---                            FROM Customers AS cus
---                            INNER JOIN Orders AS o ON cus.CustomerID = o.CustomerID
---                            INNER JOIN [Order Details] AS od ON o.OrderID = od.OrderID
---                            INNER JOIN Products AS p ON od.ProductID = p.ProductID
---                            INNER JOIN Categories AS cat ON p.CategoryID = cat.CategoryID
---                            WHERE cat.CategoryName = 'Confections'
---                            AND YEAR(o.OrderDate) = 1997)
---;
+SELECT CustomerID, CompanyName, Phone
+FROM Customers
+WHERE CustomerID NOT IN (   SELECT DISTINCT cus.CustomerID
+                            FROM Customers AS cus
+                            INNER JOIN Orders AS o ON cus.CustomerID = o.CustomerID
+                            INNER JOIN [Order Details] AS od ON o.OrderID = od.OrderID
+                            INNER JOIN Products AS p ON od.ProductID = p.ProductID
+                            INNER JOIN Categories AS cat ON p.CategoryID = cat.CategoryID
+                            WHERE cat.CategoryName = 'Confections'
+                            AND YEAR(o.OrderDate) = 1997)
+;
 
 -- 4.1
---SELECT m.firstname, m.lastname, j.birth_date, a.street
---FROM juvenile AS j
---LEFT OUTER JOIN member AS m on j.member_no = m.member_no
---INNER JOIN adult AS a ON j.adult_member_no = a.member_no
---;
+SELECT m.firstname, m.lastname, j.birth_date, a.street
+FROM juvenile AS j
+LEFT OUTER JOIN member AS m on j.member_no = m.member_no
+INNER JOIN adult AS a ON j.adult_member_no = a.member_no
+;
 
 -- 4.2
+SELECT m.firstname,
+       m.lastname,
+       j.birth_date,
+       a.street,
+       j.adult_member_no,
+       m2.firstname,
+       m2.lastname
+FROM juvenile AS j
+LEFT OUTER JOIN member AS m
+    on j.member_no = m.member_no
+INNER JOIN adult AS a
+    ON j.adult_member_no = a.member_no
+INNER JOIN member AS m2
+    ON j.adult_member_no = m2.member_no
+;
+
+-- 5.1
+SELECT
+    e2.EmployeeID AS master,
+    e1.EmployeeID AS slave
+FROM Employees AS e1
+INNER JOIN Employees AS e2
+    ON e1.ReportsTo = e2.EmployeeID
+ORDER BY e1.ReportsTo
+;
+
+-- 5.2
+SELECT e2.EmployeeID
+FROM Employees AS e1
+RIGHT OUTER JOIN Employees AS e2
+    ON e1.ReportsTo = e2.EmployeeID
+WHERE e1.EmployeeID IS NULL
+;
+
+-- 5.3
+SELECT DISTINCT e2.EmployeeID
+FROM Employees AS e1
+RIGHT OUTER JOIN Employees AS e2
+    ON e1.ReportsTo = e2.EmployeeID
+WHERE e1.EmployeeID IS NOT NULL
+;
+
+-- 6.1
+SELECT
+    a.member_no,
+    a.state,
+    COUNT(*) AS children_count
+FROM adult AS a
+INNER JOIN juvenile AS j
+    ON j.adult_member_no = a.member_no
+GROUP BY
+    a.member_no,
+    a.state
+HAVING COUNT(*) > 2
+AND a.state = 'AZ'
+;
+
+-- 6.2
+SELECT
+    a.member_no,
+    a.state,
+    COUNT(*) AS children_count
+FROM adult AS a
+INNER JOIN juvenile AS j
+    ON j.adult_member_no = a.member_no
+GROUP BY
+    a.member_no,
+    a.state
+HAVING COUNT(*) > 2
+AND a.state = 'AZ'
+UNION
+SELECT
+    a.member_no,
+    a.state,
+    COUNT(*) AS children_count
+FROM adult AS a
+INNER JOIN juvenile AS j
+    ON j.adult_member_no = a.member_no
+GROUP BY
+    a.member_no,
+    a.state
+HAVING COUNT(*) > 3
+AND a.state = 'CA'
+ORDER BY member_no
+;
+
+
+
+
+
+
