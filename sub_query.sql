@@ -409,4 +409,277 @@ FROM Products p
 WHERE p.UnitPrice < (SELECT avg_price FROM AvgPrice)
 ;
 
+-- 5.2
+WITH AvgCategoryPrice AS (
+    SELECT p.CategoryID,
+           AVG(p.UnitPrice) AS avg_price
+    FROM Products p
+    GROUP BY  p.CategoryID
+)
+SELECT p.ProductID,
+       p.ProductName,
+       p.UnitPrice,
+       p.CategoryID,
+       acp.avg_price
+FROM Products p
+INNER JOIN AvgCategoryPrice acp
+    ON p.CategoryID = acp.CategoryID
+WHERE p.UnitPrice < acp.avg_price
+;
 
+-- 5.3
+WITH AvgPrice AS (
+    SELECT AVG(p.UnitPrice) AS avg_price
+    FROM Products p
+)
+SELECT p.ProductName,
+       ROUND(p.UnitPrice, 2),
+       ROUND((SELECT avg_price FROM AvgPrice), 2) AS avg_price,
+       ROUND(ABS(p.UnitPrice - (SELECT avg_price FROM AvgPrice)), 2) AS price_diff
+FROM Products p
+;
+
+-- 5.4
+WITH AvgCategoryPrice AS (
+    SELECT p.CategoryID,
+           c.CategoryName,
+           AVG(p.UnitPrice) AS avg_price
+    FROM Products p
+    INNER JOIN Categories c
+        ON p.CategoryID = c.CategoryID
+    GROUP BY p.CategoryID, CategoryName
+    )
+SELECT acp.CategoryName,
+       p.ProductName,
+       p.UnitPrice,
+       acp.avg_price,
+       ABS(p.UnitPrice - acp.avg_price) AS price_diff
+FROM Products p
+INNER JOIN AvgCategoryPrice acp
+    ON p.CategoryID = acp.CategoryID
+;
+
+-- 6.1
+WITH CustomerProduct AS (
+    SELECT od.ProductID,
+           o.CustomerID
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY od.ProductID, o.CustomerID
+)
+SELECT p.ProductName,
+       COUNT(*) AS customer_count
+FROM Products p
+INNER JOIN CustomerProduct c
+    ON p.ProductID = c.ProductID
+GROUP BY p.ProductID, p.ProductName
+HAVING COUNT(*) > 1
+;
+
+-- 6.2
+WITH CustomerProduct AS (
+    SELECT od.ProductID,
+           o.CustomerID
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    WHERE YEAR(o.OrderDate) = 1997
+    GROUP BY od.ProductID, o.CustomerID
+)
+SELECT p.ProductName,
+       COUNT(*) AS customer_count
+FROM Products p
+INNER JOIN CustomerProduct c
+    ON p.ProductID = c.ProductID
+GROUP BY p.ProductID, p.ProductName
+HAVING COUNT(*) > 1
+;
+
+-- 6.3
+WITH Orders1997 AS (
+    SELECT o.CustomerID,
+           COUNT(DISTINCT p.ProductID) AS order_count
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    INNER JOIN Products p
+        ON od.ProductID = p.ProductID
+    INNER JOIN Categories c
+        ON p.CategoryID = c.CategoryID
+    WHERE YEAR(o.OrderDate) = 1997
+    AND c.CategoryName = 'Confections'
+    GROUP BY o.CustomerID
+    HAVING COUNT(DISTINCT p.ProductID) >= 2
+)
+SELECT c.CompanyName,
+       o.order_count
+FROM Customers c
+INNER JOIN Orders1997 o
+    ON c.CustomerID = o.CustomerID
+;
+
+-- 7.1
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+)
+SELECT e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+;
+
+-- 7.2
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    WHERE YEAR(o.OrderDate) = 1997
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+)
+SELECT TOP 1 e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+ORDER BY order_value_sum DESC
+;
+
+-- 7.3a
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+),
+HaveSlaves AS (
+    SELECT DISTINCT e1.EmployeeID
+    FROM Employees e1
+    LEFT OUTER JOIN Employees e2
+        ON e1.EmployeeID = e2.ReportsTo
+    WHERE e2.EmployeeID IS NOT NULL
+)
+SELECT e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+WHERE e.EmployeeID IN (SELECT EmployeeID FROM HaveSlaves)
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+;
+
+-- 7.3b
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+),
+HaveSlaves AS (
+    SELECT DISTINCT e1.EmployeeID
+    FROM Employees e1
+    LEFT OUTER JOIN Employees e2
+        ON e1.EmployeeID = e2.ReportsTo
+    WHERE e2.EmployeeID IS NOT NULL
+)
+SELECT e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+WHERE e.EmployeeID NOT IN (SELECT EmployeeID FROM HaveSlaves)
+GROUP BY e.EmployeeID, e.FirstName, e.LastName
+;
+
+-- 7.4a
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+),
+HaveSlaves AS (
+    SELECT DISTINCT e1.EmployeeID
+    FROM Employees e1
+    LEFT OUTER JOIN Employees e2
+        ON e1.EmployeeID = e2.ReportsTo
+    WHERE e2.EmployeeID IS NOT NULL
+),
+LastOrderDate AS (
+    SELECT o.EmployeeID,
+           MAX(o.OrderDate) AS last_order_date
+    FROM Orders o
+    GROUP BY o.EmployeeID
+)
+SELECT e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum,
+       lod.last_order_date
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+LEFT OUTER JOIN LastOrderDate lod
+    ON e.EmployeeID = lod.EmployeeID
+WHERE e.EmployeeID IN (SELECT EmployeeID FROM HaveSlaves)
+GROUP BY e.EmployeeID, e.FirstName, e.LastName, last_order_date
+;
+
+-- 7.4b
+WITH OrderValue AS (
+    SELECT o.OrderID,
+           o.EmployeeID,
+           ROUND(SUM(od.UnitPrice * od.Quantity * (1 - od.Discount)) + o.Freight, 2) AS order_value
+    FROM Orders o
+    INNER JOIN [Order Details] od
+        ON o.OrderID = od.OrderID
+    GROUP BY o.OrderID, o.EmployeeID, o.Freight
+),
+HaveSlaves AS (
+    SELECT DISTINCT e1.EmployeeID
+    FROM Employees e1
+    LEFT OUTER JOIN Employees e2
+        ON e1.EmployeeID = e2.ReportsTo
+    WHERE e2.EmployeeID IS NOT NULL
+),
+LastOrderDate AS (
+    SELECT o.EmployeeID,
+           MAX(o.OrderDate) AS last_order_date
+    FROM Orders o
+    GROUP BY o.EmployeeID
+)
+SELECT e.FirstName,
+       e.LastName,
+       ISNULL(ROUND(SUM(ov.order_value), 2), 0.00) AS order_value_sum,
+       lod.last_order_date
+FROM Employees e
+LEFT OUTER JOIN OrderValue ov
+    ON e.EmployeeID = ov.EmployeeID
+LEFT OUTER JOIN LastOrderDate lod
+    ON e.EmployeeID = lod.EmployeeID
+WHERE e.EmployeeID NOT IN (SELECT EmployeeID FROM HaveSlaves)
+GROUP BY e.EmployeeID, e.FirstName, e.LastName, last_order_date
